@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { ArrowLeft, Edit, Calendar, MapPin, Smile } from 'lucide-react'
+import { ArrowLeft, Edit, Calendar, MapPin, Smile, Tag } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import Image from 'next/image'
 
@@ -16,7 +16,11 @@ export default async function JournalEntryPage({ params }: { params: { id: strin
     .from('daily_entries')
     .select(`
       *,
-      photos (*)
+      photos (*),
+      entry_tags (
+        tag_id,
+        tags (*)
+      )
     `)
     .eq('id', params.id)
     .eq('user_id', user.id)
@@ -25,6 +29,19 @@ export default async function JournalEntryPage({ params }: { params: { id: strin
   if (!entry) {
     notFound()
   }
+
+  // Generate signed URLs for photos
+  const photosWithSignedUrls = await Promise.all(
+    (entry.photos || []).map(async (photo) => {
+      const { data } = await supabase.storage
+        .from('journal_photos')
+        .createSignedUrl(photo.storage_path, 60 * 60 * 24 * 7) // 1 week
+      return { ...photo, signed_url: data?.signedUrl }
+    })
+  )
+
+  // Extract tags from entry_tags
+  const tags = (entry.entry_tags?.map((et: { tags: { id: string; name: string; color: string | null } | null }) => et.tags).filter((tag): tag is { id: string; name: string; color: string | null } => Boolean(tag)) || []) as { id: string; name: string; color: string | null }[]
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto pb-12">
@@ -58,6 +75,17 @@ export default async function JournalEntryPage({ params }: { params: { id: strin
               {entry.location}
             </div>
           )}
+          {tags.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <Tag className="w-4 h-4" />
+              {tags.map((tag: { id: string; name: string; color: string | null }) => (
+                <span key={tag.id} className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground" style={{ borderColor: tag.color || 'transparent' }}>
+                  {tag.color && <span className="w-2 h-2 rounded-full mr-1 inline-block" style={{ backgroundColor: tag.color }} />}
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -65,18 +93,24 @@ export default async function JournalEntryPage({ params }: { params: { id: strin
         <p className="whitespace-pre-wrap leading-relaxed">{entry.description}</p>
       </div>
 
-      {entry.photos && entry.photos.length > 0 && (
+      {photosWithSignedUrls.length > 0 && (
         <div className="pt-8 space-y-4">
           <h3 className="text-lg font-semibold border-b pb-2">Photos</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {entry.photos.map((photo) => (
+            {photosWithSignedUrls.map((photo) => (
               <div key={photo.id} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
-                <Image
-                  src={photo.photo_url}
-                  alt={photo.caption || 'Journal photo'}
-                  fill
-                  className="object-cover"
-                />
+                {photo.signed_url ? (
+                  <Image
+                    src={photo.signed_url}
+                    alt={photo.caption || 'Journal photo'}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
+                    Failed to load image
+                  </div>
+                )}
               </div>
             ))}
           </div>

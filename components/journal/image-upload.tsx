@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
@@ -31,19 +31,18 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) throw new Error('Not authenticated')
 
+      const storagePath = `${user.user.id}/${filePath}`
+
       const { error: uploadError } = await supabase.storage
         .from('journal_photos')
-        .upload(`${user.user.id}/${filePath}`, file)
+        .upload(storagePath, file)
 
       if (uploadError) {
         throw uploadError
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('journal_photos')
-        .getPublicUrl(`${user.user.id}/${filePath}`)
-
-      onChange([...value, publicUrl])
+      // Store storage path instead of public URL
+      onChange([...value, storagePath])
       toast.success('Image uploaded successfully')
     } catch (error) {
       console.error('Upload error:', error)
@@ -56,32 +55,27 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
     }
   }
 
-  function onRemove(urlToRemove: string) {
-    onChange(value.filter(url => url !== urlToRemove))
+  function onRemove(storagePathToRemove: string) {
+    onChange(value.filter(path => path !== storagePathToRemove))
   }
 
   return (
     <div className="space-y-4">
       {value.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {value.map((url, i) => (
+          {value.map((storagePath, i) => (
             <div key={i} className="relative rounded-md overflow-hidden aspect-video border group">
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center justify-center">
                 <Button 
                   type="button" 
                   variant="destructive" 
                   size="icon" 
-                  onClick={() => onRemove(url)}
+                  onClick={() => onRemove(storagePath)}
                 >
                   <X className="w-4 h-4" />
                 </Button>
               </div>
-              <Image 
-                src={url} 
-                alt="Journal photo" 
-                fill 
-                className="object-cover"
-              />
+              <SignedImage storagePath={storagePath} alt="Journal photo" />
             </div>
           ))}
         </div>
@@ -115,5 +109,44 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
         </Button>
       </div>
     </div>
+  )
+}
+
+// Client component to fetch and display signed URL for a storage path
+function SignedImage({ storagePath, alt }: { storagePath: string; alt: string }) {
+  const [src, setSrc] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    let mounted = true
+    supabase.storage
+      .from('journal_photos')
+      .createSignedUrl(storagePath, 60 * 60)
+      .then(({ data }) => {
+        if (mounted && data?.signedUrl) {
+          setSrc(data.signedUrl)
+        }
+        setIsLoading(false)
+      })
+      .catch(() => setIsLoading(false))
+    return () => { mounted = false }
+  }, [storagePath, supabase])
+
+  if (isLoading) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-muted">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <Image 
+      src={src || '/file.svg'} 
+      alt={alt} 
+      fill 
+      className="object-cover"
+    />
   )
 }

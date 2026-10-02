@@ -38,6 +38,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { journalEntrySchema, JournalEntryFormValues } from '@/lib/validators/journal'
 import { createJournalEntry, updateJournalEntry } from '@/app/actions/journal'
 import { ImageUpload } from '@/components/journal/image-upload'
+import { TagsManager } from '@/components/journal/tags-manager'
 
 const MOODS = [
   { value: 'Excellent', label: '😄 Excellent' },
@@ -66,6 +67,7 @@ export function JournalForm({ initialData }: { initialData?: Partial<JournalEntr
       location: initialData?.location || '',
       entry_date: initialData?.entry_date || format(new Date(), 'yyyy-MM-dd'),
       photos: initialData?.photos || [],
+      tags: initialData?.tags || [],
     },
   })
 
@@ -208,6 +210,24 @@ export function JournalForm({ initialData }: { initialData?: Partial<JournalEntr
                     <ImageUpload 
                       value={field.value || []} 
                       onChange={field.onChange} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tags</FormLabel>
+                  <FormControl>
+                    <TagsManager
+                      entryId={initialData?.id}
+                      selectedTags={field.value || []}
+                      onTagsChange={field.onChange}
                     />
                   </FormControl>
                   <FormMessage />

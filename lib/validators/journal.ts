@@ -8,6 +8,7 @@ export const journalEntrySchema = z.object({
   mood: z.string().optional(),
   location: z.string().optional(),
   photos: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
 })
 
 export type JournalEntryFormValues = z.infer<typeof journalEntrySchema>

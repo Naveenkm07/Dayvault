@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+const PAGE_SIZE = 20
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get('q')
+  const page = parseInt(searchParams.get('page') || '1', 10)
+  const offset = (page - 1) * PAGE_SIZE
 
   if (!query) {
-    return NextResponse.json({ results: [] })
+    return NextResponse.json({ results: [], page, totalPages: 0 })
   }
 
   const supabase = await createClient()
@@ -17,20 +21,20 @@ export async function GET(request: Request) {
   }
 
   // Search daily entries
-  const { data: entries } = await supabase
+  const { data: entries, count: entriesCount } = await supabase
     .from('daily_entries')
-    .select('id, title, description, entry_date')
+    .select('id, title, description, entry_date', { count: 'exact' })
     .eq('user_id', user.id)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
-    .limit(10)
+    .range(offset, offset + PAGE_SIZE - 1)
 
   // Search plans
-  const { data: plans } = await supabase
+  const { data: plans, count: plansCount } = await supabase
     .from('plans')
-    .select('id, title, description, plan_date')
+    .select('id, title, description, plan_date', { count: 'exact' })
     .eq('user_id', user.id)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
-    .limit(10)
+    .range(offset, offset + PAGE_SIZE - 1)
 
   const formattedEntries = (entries || []).map((e) => ({
     ...e,
@@ -49,5 +53,8 @@ export async function GET(request: Request) {
     return new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
   })
 
-  return NextResponse.json({ results: combined })
+  const totalCount = (entriesCount || 0) + (plansCount || 0)
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+
+  return NextResponse.json({ results: combined, page, totalPages })
 }

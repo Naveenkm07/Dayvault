@@ -12,31 +12,40 @@ export type Database = {
       profiles: {
         Row: {
           id: string
-          name: string
+          name: string | null
           avatar_url: string | null
-          theme: string
-          accent_color: string
+          theme: string | null
+          accent_color: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
-          name: string
+          name?: string | null
           avatar_url?: string | null
-          theme?: string
-          accent_color?: string
+          theme?: string | null
+          accent_color?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          name?: string
+          name?: string | null
           avatar_url?: string | null
-          theme?: string
-          accent_color?: string
+          theme?: string | null
+          accent_color?: string | null
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       daily_entries: {
         Row: {
@@ -72,14 +81,23 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "daily_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       photos: {
         Row: {
           id: string
           user_id: string
           entry_id: string
+          photo_url: string
           storage_path: string
-          public_or_signed_url_reference: string
           caption: string | null
           created_at: string
         }
@@ -87,8 +105,8 @@ export type Database = {
           id?: string
           user_id: string
           entry_id: string
+          photo_url: string
           storage_path: string
-          public_or_signed_url_reference: string
           caption?: string | null
           created_at?: string
         }
@@ -96,11 +114,27 @@ export type Database = {
           id?: string
           user_id?: string
           entry_id?: string
+          photo_url?: string
           storage_path?: string
-          public_or_signed_url_reference?: string
           caption?: string | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "photos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photos_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "daily_entries"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       plans: {
         Row: {
@@ -139,29 +173,47 @@ export type Database = {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       tags: {
         Row: {
           id: string
           user_id: string
           name: string
-          color: string
+          color: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
           name: string
-          color?: string
+          color?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           name?: string
-          color?: string
+          color?: string | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       entry_tags: {
         Row: {
@@ -176,6 +228,22 @@ export type Database = {
           entry_id?: string
           tag_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "entry_tags_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "daily_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entry_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {

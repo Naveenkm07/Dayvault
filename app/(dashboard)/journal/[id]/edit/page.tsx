@@ -15,7 +15,11 @@ export default async function EditJournalEntryPage({ params }: { params: { id: s
     .from('daily_entries')
     .select(`
       *,
-      photos (photo_url)
+      photos (storage_path),
+      entry_tags (
+        tag_id,
+        tags (*)
+      )
     `)
     .eq('id', params.id)
     .eq('user_id', user.id)
@@ -25,9 +29,15 @@ export default async function EditJournalEntryPage({ params }: { params: { id: s
     notFound()
   }
 
+  const tags = (entry.entry_tags?.map((et: { tags: { id: string } | null }) => et.tags?.id).filter((id): id is string => Boolean(id)) || []) as string[]
+
   const initialData = {
     ...entry,
-    photos: entry.photos?.map((p) => p.photo_url) || []
+    description: entry.description ?? undefined,
+    mood: entry.mood ?? undefined,
+    location: entry.location ?? undefined,
+    photos: entry.photos?.map((p) => p.storage_path) || [],
+    tags,
   }
 
   return (

@@ -1,5 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { SettingsClient } from '@/components/settings/settings-client'
+import type { User } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
+
+type Profile = Database['public']['Tables']['profiles']['Row']
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -22,8 +26,8 @@ export default async function SettingsPage() {
       </div>
 
       <SettingsClient 
-        user={{ id: user.id, email: user.email }} 
-        profile={profile || { name: '', theme: 'system', accent_color: 'blue' }} 
+        user={user as User} 
+        profile={(profile as Profile) || { id: user.id, name: null, avatar_url: null, theme: 'system', accent_color: 'blue', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} 
       />
     </div>
   )

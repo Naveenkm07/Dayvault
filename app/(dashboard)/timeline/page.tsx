@@ -2,22 +2,31 @@ import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { ImageIcon } from 'lucide-react'
+import { ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 
-export default async function TimelinePage() {
+const PAGE_SIZE = 50
+
+export default async function TimelinePage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return null
 
-  const { data: entries } = await supabase
+  const params = await searchParams
+  const page = parseInt(params.page || '1', 10)
+  const offset = (page - 1) * PAGE_SIZE
+
+  const { data: entries, count } = await supabase
     .from('daily_entries')
     .select(`
       *,
       photos (count)
-    `)
+    `, { count: 'exact' })
     .eq('user_id', user.id)
     .order('entry_date', { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+
+  const totalPages = Math.ceil((count || 0) / PAGE_SIZE)
 
   // Group entries by year and month
   type Entry = NonNullable<typeof entries>[0]
@@ -35,9 +44,38 @@ export default async function TimelinePage() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Timeline</h1>
-        <p className="text-muted-foreground">A chronological view of your memories.</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Timeline</h1>
+          <p className="text-muted-foreground">A chronological view of your memories.</p>
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <a 
+              href={page > 1 ? `/timeline?page=${page - 1}` : '#'} 
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                page > 1 ? 'text-muted-foreground hover:text-foreground' : 'text-muted-foreground/50 pointer-events-none'
+              }`}
+              aria-disabled={page <= 1}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </a>
+            <span className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            <a 
+              href={page < totalPages ? `/timeline?page=${page + 1}` : '#'} 
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                page < totalPages ? 'text-muted-foreground hover:text-foreground' : 'text-muted-foreground/50 pointer-events-none'
+              }`}
+              aria-disabled={page >= totalPages}
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="space-y-12 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-muted before:to-transparent">

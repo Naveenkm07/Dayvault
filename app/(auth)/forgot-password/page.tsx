@@ -6,23 +6,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { sendPasswordResetEmail } from '../actions'
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
 
   async function handleSubmit(formData: FormData) {
     setIsLoading(true)
-    const email = formData.get('email') as string
-    const supabase = await createClient()
+    const result = await sendPasswordResetEmail(formData)
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${location.origin}/auth/callback?next=/settings`,
-    })
-
-    if (error) {
-      toast.error(error.message)
+    if (result.error) {
+      toast.error(result.error)
     } else {
       toast.success('Password reset email sent!')
     }
