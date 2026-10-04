@@ -183,6 +183,14 @@ export async function deleteJournalEntry(id: string) {
     return { error: 'Not authenticated' }
   }
 
+  // First, get photos to delete from storage
+  const { data: photos } = await supabase
+    .from('photos')
+    .select('storage_path')
+    .eq('entry_id', id)
+    .eq('user_id', user.id)
+
+  // Delete entry (cascades to photos table via FK)
   const { error } = await supabase
     .from('daily_entries')
     .delete()
@@ -191,6 +199,13 @@ export async function deleteJournalEntry(id: string) {
 
   if (error) {
     return { error: error.message }
+  }
+
+  // Delete photo files from storage
+  if (photos && photos.length > 0) {
+    await supabase.storage.from('journal_photos').remove(
+      photos.map(p => p.storage_path)
+    )
   }
 
   revalidatePath('/journal')
