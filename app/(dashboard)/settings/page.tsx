@@ -1,21 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { SettingsClient } from '@/components/settings/settings-client'
-import type { User } from '@supabase/supabase-js'
-import type { Database } from '@/types/supabase'
-
-type Profile = Database['public']['Tables']['profiles']['Row']
+import { auth } from '@clerk/nextjs/server'
 
 export default async function SettingsPage() {
+  const { userId } = await auth()
+
+  if (!userId) return null
+
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) return null
-
-  // Fetch profile
+  // Fetch profile using Clerk user ID
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single()
 
   return (
@@ -26,8 +24,10 @@ export default async function SettingsPage() {
       </div>
 
       <SettingsClient 
-        user={user as User} 
-        profile={(profile as Profile) || { id: user.id, name: null, avatar_url: null, theme: 'system', accent_color: 'blue', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }} 
+        profile={{ 
+          name: profile?.name ?? null, 
+          accent_color: profile?.accent_color ?? 'blue' 
+        }} 
       />
     </div>
   )

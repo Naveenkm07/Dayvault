@@ -1,11 +1,7 @@
 'use client'
 
-import { User } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
-
-type Profile = Database['public']['Tables']['profiles']['Row']
-
 import { useState, useEffect } from 'react'
+import { UserProfile } from '@clerk/nextjs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -36,7 +32,7 @@ function applyAccentColor(accentId: string) {
   }
 }
 
-export function SettingsClient({ user, profile }: { user: User, profile: Profile }) {
+export function SettingsClient({ profile }: { profile: { name: string | null; accent_color: string } }) {
   const { setTheme, theme } = useTheme()
   const [isSaving, setIsSaving] = useState(false)
   
@@ -94,15 +90,20 @@ export function SettingsClient({ user, profile }: { user: User, profile: Profile
     <div className="space-y-8">
       <Card>
         <CardHeader>
+          <CardTitle>Account</CardTitle>
+          <CardDescription>Manage your Clerk account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UserProfile />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Profile</CardTitle>
-          <CardDescription>Update your personal information.</CardDescription>
+          <CardDescription>Update your display name.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" value={user.email} disabled />
-            <p className="text-xs text-muted-foreground">Your email is used for login and cannot be changed here.</p>
-          </div>
           <div className="space-y-2">
             <Label htmlFor="name">Display Name</Label>
             <Input 

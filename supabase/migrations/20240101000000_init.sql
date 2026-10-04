@@ -1,6 +1,7 @@
 -- Create tables
 CREATE TABLE profiles (
-  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  clerk_user_id TEXT UNIQUE NOT NULL,
   name TEXT,
   avatar_url TEXT,
   theme TEXT DEFAULT 'system',
@@ -11,7 +12,7 @@ CREATE TABLE profiles (
 
 CREATE TABLE daily_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   entry_date DATE NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -23,7 +24,7 @@ CREATE TABLE daily_entries (
 
 CREATE TABLE plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   plan_date DATE NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -36,7 +37,7 @@ CREATE TABLE plans (
 
 CREATE TABLE photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   entry_id UUID REFERENCES daily_entries(id) ON DELETE CASCADE,
   photo_url TEXT NOT NULL,
   storage_path TEXT NOT NULL,
@@ -46,7 +47,7 @@ CREATE TABLE photos (
 
 CREATE TABLE tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   color TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -66,17 +67,19 @@ ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entry_tags ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
-CREATE POLICY "Users can manage their own profile" ON profiles FOR ALL USING (auth.uid() = id);
-CREATE POLICY "Users can manage their own entries" ON daily_entries FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own plans" ON plans FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own photos" ON photos FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can manage their own tags" ON tags FOR ALL USING (auth.uid() = user_id);
+-- RLS Policies using Clerk user ID from JWT
+-- Clerk JWT template "supabase" should include: {"sub": "{{user.id}}", "clerk_user_id": "{{user.id}}"}
+CREATE POLICY "Users can manage their own profile" ON profiles FOR ALL USING (clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true));
+CREATE POLICY "Users can manage their own entries" ON daily_entries FOR ALL USING (user_id = (SELECT id FROM profiles WHERE clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true)));
+CREATE POLICY "Users can manage their own plans" ON plans FOR ALL USING (user_id = (SELECT id FROM profiles WHERE clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true)));
+CREATE POLICY "Users can manage their own photos" ON photos FOR ALL USING (user_id = (SELECT id FROM profiles WHERE clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true)));
+CREATE POLICY "Users can manage their own tags" ON tags FOR ALL USING (user_id = (SELECT id FROM profiles WHERE clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true)));
 CREATE POLICY "Users can manage their own entry_tags" ON entry_tags FOR ALL USING (
-  auth.uid() = (SELECT user_id FROM tags WHERE id = entry_tags.tag_id)
+  (SELECT user_id FROM tags WHERE id = entry_tags.tag_id) = (SELECT id FROM profiles WHERE clerk_user_id = current_setting('request.jwt.claims.clerk_user_id', true))
 );
 
 -- Indexes
+CREATE INDEX idx_profiles_clerk_user_id ON profiles(clerk_user_id);
 CREATE INDEX idx_entries_user_date ON daily_entries(user_id, entry_date);
 CREATE INDEX idx_plans_user_date ON plans(user_id, plan_date);
 CREATE INDEX idx_tags_user_id ON tags(user_id);
@@ -107,4 +110,3 @@ CREATE TRIGGER update_daily_entries_updated_at
 CREATE TRIGGER update_plans_updated_at
   BEFORE UPDATE ON plans
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-

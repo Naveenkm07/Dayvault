@@ -2,9 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { Database } from '@/types/supabase'
 import { SupabaseClient } from '@supabase/supabase-js'
+import { auth } from '@clerk/nextjs/server'
 
 export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies()
+  const { getToken } = await auth()
+
+  const supabaseAccessToken = await getToken({ template: 'supabase' })
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,6 +29,11 @@ export async function createClient(): Promise<SupabaseClient<Database>> {
             // user sessions.
           }
         },
+      },
+      global: {
+        headers: supabaseAccessToken
+          ? { Authorization: `Bearer ${supabaseAccessToken}` }
+          : {},
       },
     }
   )
