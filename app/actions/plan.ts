@@ -4,8 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { planSchema, PlanFormValues } from '@/lib/validators/plan'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@clerk/nextjs/server'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/supabase'
 
-async function getProfileId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
+async function getProfileId(supabase: SupabaseClient<Database>): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   
