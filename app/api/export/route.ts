@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { auth } from '@clerk/nextjs/server'
 
 const PAGE_SIZE = 1000
 
@@ -8,31 +9,48 @@ export async function GET(request: Request) {
   const page = parseInt(searchParams.get('page') || '1', 10)
   const offset = (page - 1) * PAGE_SIZE
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
+  const supabase = await createClient()
+
+  // Get profile using Clerk user ID
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  // Get the internal profile ID for querying related tables
+  const profileId = profile?.id
+
+  if (!profileId) {
+    return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+  }
+
   // Fetch all user data with pagination
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   const { data: entries, count: entriesCount } = await supabase
     .from('daily_entries')
     .select('*', { count: 'exact' })
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('entry_date', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
-  
+
   const { data: plans, count: plansCount } = await supabase
     .from('plans')
     .select('*', { count: 'exact' })
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('plan_date', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1)
-  
-  const { data: tags } = await supabase.from('tags').select('*').eq('user_id', user.id)
-  
+
+  const { data: tags } = await supabase
+    .from('tags')
+    .select('*')
+    .eq('user_id', profileId)
+
   // entry_tags is a join table without user_id - fetch via entries
   const entryIds = entries?.map(e => e.id) || []
   const { data: entryTags } = entryIds.length > 0

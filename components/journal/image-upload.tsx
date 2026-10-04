@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
+import { useAuth } from '@clerk/nextjs'
 
 interface ImageUploadProps {
   value: string[]
@@ -15,10 +16,16 @@ interface ImageUploadProps {
 export function ImageUpload({ value, onChange }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const supabase = createClient()
+  const { userId } = useAuth()
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     try {
       if (!e.target.files || e.target.files.length === 0) {
+        return
+      }
+
+      if (!userId) {
+        toast.error('Not authenticated')
         return
       }
 
@@ -28,10 +35,7 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
       const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
       const filePath = `${fileName}`
 
-      const { data: user } = await supabase.auth.getUser()
-      if (!user.user) throw new Error('Not authenticated')
-
-      const storagePath = `${user.user.id}/${filePath}`
+      const storagePath = `${userId}/${filePath}`
 
       const { error: uploadError } = await supabase.storage
         .from('journal_photos')
@@ -41,7 +45,6 @@ export function ImageUpload({ value, onChange }: ImageUploadProps) {
         throw uploadError
       }
 
-      // Store storage path instead of public URL
       onChange([...value, storagePath])
       toast.success('Image uploaded successfully')
     } catch (error) {

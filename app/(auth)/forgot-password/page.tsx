@@ -9,7 +9,7 @@ export default function ForgotPasswordPage() {
         <SignIn
           routing="path"
           path="/forgot-password"
-          signUpUrl="/signup"
+          signUpUrl="/sign-up"
           appearance={{
             elements: {
               formButtonPrimary: 'bg-primary hover:bg-primary/90 text-primary-foreground',

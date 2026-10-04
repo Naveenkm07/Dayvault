@@ -3,12 +3,25 @@
 import { createClient } from '@/lib/supabase/server'
 import { planSchema, PlanFormValues } from '@/lib/validators/plan'
 import { revalidatePath } from 'next/cache'
+import { auth } from '@clerk/nextjs/server'
+
+async function getProfileId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', user.id)
+    .single()
+  
+  return profile?.id ?? null
+}
 
 export async function createPlan(data: PlanFormValues) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -20,7 +33,7 @@ export async function createPlan(data: PlanFormValues) {
   const { error } = await supabase
     .from('plans')
     .insert({
-      user_id: user.id,
+      user_id: profileId,
       title: result.data.title,
       description: result.data.description,
       plan_date: result.data.plan_date,
@@ -41,9 +54,8 @@ export async function createPlan(data: PlanFormValues) {
 
 export async function updatePlan(data: PlanFormValues) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -64,7 +76,7 @@ export async function updatePlan(data: PlanFormValues) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', result.data.id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
@@ -78,9 +90,8 @@ export async function updatePlan(data: PlanFormValues) {
 
 export async function togglePlanCompletion(id: string, completed: boolean) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -91,7 +102,7 @@ export async function togglePlanCompletion(id: string, completed: boolean) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
@@ -105,9 +116,8 @@ export async function togglePlanCompletion(id: string, completed: boolean) {
 
 export async function deletePlan(id: string) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -115,7 +125,7 @@ export async function deletePlan(id: string) {
     .from('plans')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }

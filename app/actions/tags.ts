@@ -4,11 +4,23 @@ import { createClient } from '@/lib/supabase/server'
 import { tagSchema, TagFormValues } from '@/lib/validators/tag'
 import { revalidatePath } from 'next/cache'
 
+async function getProfileId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', user.id)
+    .single()
+  
+  return profile?.id ?? null
+}
+
 export async function createTag(data: TagFormValues) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -20,7 +32,7 @@ export async function createTag(data: TagFormValues) {
   const { data: newTag, error } = await supabase
     .from('tags')
     .insert({
-      user_id: user.id,
+      user_id: profileId,
       name: result.data.name,
       color: result.data.color,
     })
@@ -38,9 +50,8 @@ export async function createTag(data: TagFormValues) {
 
 export async function updateTag(data: TagFormValues) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -56,7 +67,7 @@ export async function updateTag(data: TagFormValues) {
       color: result.data.color,
     })
     .eq('id', result.data.id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
@@ -69,20 +80,18 @@ export async function updateTag(data: TagFormValues) {
 
 export async function deleteTag(id: string) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
-  // First delete associated entry_tags
   await supabase.from('entry_tags').delete().eq('tag_id', id)
 
   const { error } = await supabase
     .from('tags')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
@@ -95,16 +104,15 @@ export async function deleteTag(id: string) {
 
 export async function getUserTags() {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
   const { data: tags, error } = await supabase
     .from('tags')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('name')
 
   if (error) {
@@ -116,30 +124,27 @@ export async function getUserTags() {
 
 export async function addTagToEntry(entryId: string, tagId: string) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
-  // Verify entry belongs to user
   const { data: entry } = await supabase
     .from('daily_entries')
     .select('id')
     .eq('id', entryId)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .single()
 
   if (!entry) {
     return { error: 'Entry not found' }
   }
 
-  // Verify tag belongs to user
   const { data: tag } = await supabase
     .from('tags')
     .select('id')
     .eq('id', tagId)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .single()
 
   if (!tag) {
@@ -161,9 +166,8 @@ export async function addTagToEntry(entryId: string, tagId: string) {
 
 export async function removeTagFromEntry(entryId: string, tagId: string) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -184,9 +188,8 @@ export async function removeTagFromEntry(entryId: string, tagId: string) {
 
 export async function getEntryTags(entryId: string) {
   const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 

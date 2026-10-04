@@ -5,30 +5,28 @@ import { journalEntrySchema, JournalEntryFormValues } from '@/lib/validators/jou
 import { revalidatePath } from 'next/cache'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
+import { auth } from '@clerk/nextjs/server'
 
 type SupabaseServerClient = SupabaseClient<Database>
 
 function extractStoragePath(photoUrl: string, _userId: string): string {
-  // Photo URL format: https://<project>.supabase.co/storage/v1/object/public/journal_photos/<user_id>/<filePath>
   const url = new URL(photoUrl)
   const pathParts = url.pathname.split('/')
   const bucketIndex = pathParts.findIndex(p => p === 'journal_photos')
   if (bucketIndex !== -1 && bucketIndex + 1 < pathParts.length) {
     return pathParts.slice(bucketIndex + 1).join('/')
   }
-  // Fallback: assume the path starts after the bucket name
   return photoUrl.split('journal_photos/')[1] || ''
 }
 
 async function handleTags(
   supabase: SupabaseServerClient,
   entryId: string,
-  userId: string,
+  profileId: string,
   tagIds: string[] | undefined
 ) {
   if (tagIds === undefined) return
 
-  // Get current tags for this entry
   const { data: currentTags } = await supabase
     .from('entry_tags')
     .select('tag_id')
@@ -37,7 +35,6 @@ async function handleTags(
   const currentTagIds = currentTags?.map((t: { tag_id: string }) => t.tag_id) || []
   const newTagIds = tagIds || []
 
-  // Remove tags that are no longer selected
   const tagsToRemove = currentTagIds.filter((id: string) => !newTagIds.includes(id))
   if (tagsToRemove.length > 0) {
     await supabase
@@ -47,7 +44,6 @@ async function handleTags(
       .in('tag_id', tagsToRemove)
   }
 
-  // Add new tags
   const tagsToAdd = newTagIds.filter(id => !currentTagIds.includes(id))
   if (tagsToAdd.length > 0) {
     const tagInserts = tagsToAdd.map(tagId => ({ entry_id: entryId, tag_id: tagId }))
@@ -55,11 +51,24 @@ async function handleTags(
   }
 }
 
+async function getProfileId(supabase: SupabaseServerClient): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', user.id)
+    .single()
+  
+  return profile?.id ?? null
+}
+
 export async function createJournalEntry(data: JournalEntryFormValues) {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -71,7 +80,7 @@ export async function createJournalEntry(data: JournalEntryFormValues) {
   const { data: newEntry, error } = await supabase
     .from('daily_entries')
     .insert({
-      user_id: user.id,
+      user_id: profileId,
       title: result.data.title,
       description: result.data.description,
       entry_date: result.data.entry_date,
@@ -87,17 +96,16 @@ export async function createJournalEntry(data: JournalEntryFormValues) {
 
   if (result.data.photos && result.data.photos.length > 0) {
     const photoInserts = result.data.photos.map(photoUrl => ({
-      user_id: user.id,
+      user_id: profileId,
       entry_id: newEntry.id,
       photo_url: photoUrl,
-      storage_path: extractStoragePath(photoUrl, user.id)
+      storage_path: extractStoragePath(photoUrl, profileId)
     }))
     
     await supabase.from('photos').insert(photoInserts)
   }
 
-  // Handle tags
-  await handleTags(supabase, newEntry.id, user.id, result.data.tags)
+  await handleTags(supabase, newEntry.id, profileId, result.data.tags)
 
   revalidatePath('/journal')
   revalidatePath('/dashboard')
@@ -109,8 +117,8 @@ export async function createJournalEntry(data: JournalEntryFormValues) {
 export async function updateJournalEntry(data: JournalEntryFormValues) {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
@@ -132,15 +140,13 @@ export async function updateJournalEntry(data: JournalEntryFormValues) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', entryId)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
   }
 
-  // Very simple approach: delete old photos and insert new ones
   if (result.data.photos !== undefined) {
-    // Delete old photo records AND storage objects
     const { data: oldPhotos } = await supabase
       .from('photos')
       .select('storage_path')
@@ -156,17 +162,16 @@ export async function updateJournalEntry(data: JournalEntryFormValues) {
     
     if (result.data.photos.length > 0) {
       const photoInserts = result.data.photos.map(photoUrl => ({
-        user_id: user.id,
+        user_id: profileId,
         entry_id: entryId,
         photo_url: photoUrl,
-        storage_path: extractStoragePath(photoUrl, user.id)
+        storage_path: extractStoragePath(photoUrl, profileId)
       }))
       await supabase.from('photos').insert(photoInserts)
     }
   }
 
-  // Handle tags
-  await handleTags(supabase, entryId, user.id, result.data.tags)
+  await handleTags(supabase, entryId, profileId, result.data.tags)
 
   revalidatePath('/journal')
   revalidatePath('/dashboard')
@@ -178,30 +183,27 @@ export async function updateJournalEntry(data: JournalEntryFormValues) {
 export async function deleteJournalEntry(id: string) {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  const profileId = await getProfileId(supabase)
+  if (!profileId) {
     return { error: 'Not authenticated' }
   }
 
-  // First, get photos to delete from storage
   const { data: photos } = await supabase
     .from('photos')
     .select('storage_path')
     .eq('entry_id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
-  // Delete entry (cascades to photos table via FK)
   const { error } = await supabase
     .from('daily_entries')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
 
   if (error) {
     return { error: error.message }
   }
 
-  // Delete photo files from storage
   if (photos && photos.length > 0) {
     await supabase.storage.from('journal_photos').remove(
       photos.map(p => p.storage_path)

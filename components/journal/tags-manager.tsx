@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '@clerk/nextjs'
 
 interface TagsManagerProps {
   entryId?: string
@@ -20,16 +21,16 @@ export function TagsManager({ entryId, selectedTags, onTagsChange }: TagsManager
   const [newTagColor, setNewTagColor] = useState('#3b82f6')
   const [isCreating, setIsCreating] = useState(false)
   const supabase = createClient()
+  const { userId } = useAuth()
 
   const fetchTags = useCallback(async () => {
+    if (!userId) return
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
+      const supabase = createClient()
       const { data, error } = await supabase
         .from('tags')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('name')
 
       if (error) throw error
@@ -39,24 +40,21 @@ export function TagsManager({ entryId, selectedTags, onTagsChange }: TagsManager
     } finally {
       setIsLoading(false)
     }
-  }, [supabase])
+  }, [userId])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTags()
   }, [fetchTags])
 
   async function handleCreateTag() {
-    if (!newTagName.trim()) return
+    if (!newTagName.trim() || !userId) return
     setIsCreating(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
+      const supabase = createClient()
       const { data, error } = await supabase
         .from('tags')
         .insert({
-          user_id: user.id,
+          user_id: userId,
           name: newTagName.trim(),
           color: newTagColor,
         })
@@ -77,14 +75,12 @@ export function TagsManager({ entryId, selectedTags, onTagsChange }: TagsManager
   }
 
   async function handleTagToggle(tagId: string) {
-    if (!entryId) return
+    if (!entryId || !userId) return
 
     const isSelected = selectedTags.includes(tagId)
     try {
+      const supabase = createClient()
       if (isSelected) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('Not authenticated')
-        
         const { error } = await supabase
           .from('entry_tags')
           .delete()
@@ -94,9 +90,6 @@ export function TagsManager({ entryId, selectedTags, onTagsChange }: TagsManager
         
         onTagsChange(selectedTags.filter(t => t !== tagId))
       } else {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) throw new Error('Not authenticated')
-        
         const { error } = await supabase
           .from('entry_tags')
           .insert({ entry_id: entryId, tag_id: tagId })
@@ -152,7 +145,7 @@ export function TagsManager({ entryId, selectedTags, onTagsChange }: TagsManager
         />
         <Button 
           onClick={handleCreateTag} 
-          disabled={isCreating || !newTagName.trim()}
+          disabled={isCreating || !newTagName.trim() || !userId}
           size="sm"
         >
           {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}

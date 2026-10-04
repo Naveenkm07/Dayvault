@@ -17,22 +17,19 @@ export function createClient(): SupabaseClient<Database> {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
-        global: {
-          fetch: async (url, options = {}) => {
-            let token = null
-            if (typeof window !== 'undefined' && (window as any).Clerk?.session) {
-              token = await (window as any).Clerk.session.getToken({ template: 'supabase' })
-            }
-            const headers = new Headers(options?.headers)
-            if (token) {
-              headers.set('Authorization', `Bearer ${token}`)
-            }
-            return fetch(url, {
-              ...options,
-              headers,
-            })
+        async getSession() {
+          const { getToken } = await import('@clerk/nextjs')
+          const token = await getToken({ template: 'supabase' })
+          if (!token) return null
+          
+          return {
+            access_token: token,
+            refresh_token: '',
+            expires_in: 0,
+            token_type: 'bearer',
+            user: null,
           }
-        }
+        },
       }
     )
   }

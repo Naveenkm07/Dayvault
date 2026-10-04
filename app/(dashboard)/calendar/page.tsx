@@ -1,12 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
 import { CalendarClient } from '@/components/calendar/calendar-client'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { auth } from '@clerk/nextjs/server'
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) return null
+  if (!userId) return null
+
+  const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return null
+
+  const profileId = profile.id
 
   const params = await searchParams
   const monthParam = params.month || format(new Date(), 'yyyy-MM')
@@ -19,13 +31,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     supabase
       .from('daily_entries')
       .select('id, title, entry_date')
-      .eq('user_id', user.id)
+      .eq('user_id', profileId)
       .gte('entry_date', format(monthStart, 'yyyy-MM-dd'))
       .lte('entry_date', format(monthEnd, 'yyyy-MM-dd')),
     supabase
       .from('plans')
       .select('id, title, plan_date, completed')
-      .eq('user_id', user.id)
+      .eq('user_id', profileId)
       .gte('plan_date', format(monthStart, 'yyyy-MM-dd'))
       .lte('plan_date', format(monthEnd, 'yyyy-MM-dd'))
   ])

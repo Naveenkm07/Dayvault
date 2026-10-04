@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { auth } from '@clerk/nextjs/server'
 
 const PAGE_SIZE = 20
 
@@ -13,18 +14,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [], page, totalPages: 0 })
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) {
+  if (!userId) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
   }
+
+  const supabase = await createClient()
+
+  // Get profile using Clerk user ID
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) {
+    return NextResponse.json({ results: [], page, totalPages: 0 })
+  }
+
+  const profileId = profile.id
 
   // Search daily entries
   const { data: entries, count: entriesCount } = await supabase
     .from('daily_entries')
     .select('id, title, description, entry_date', { count: 'exact' })
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
     .range(offset, offset + PAGE_SIZE - 1)
 
@@ -32,7 +47,7 @@ export async function GET(request: Request) {
   const { data: plans, count: plansCount } = await supabase
     .from('plans')
     .select('id, title, description, plan_date', { count: 'exact' })
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
     .range(offset, offset + PAGE_SIZE - 1)
 

@@ -5,12 +5,24 @@ import { Plus, Calendar as CalendarIcon, Smile, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
+import { auth } from '@clerk/nextjs/server'
 
 export default async function JournalPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) return null
+  if (!userId) return null
+
+  const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return null
+
+  const profileId = profile.id
 
   const { data: entries } = await supabase
     .from('daily_entries')
@@ -18,7 +30,7 @@ export default async function JournalPage() {
       *,
       photos (count)
     `)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('entry_date', { ascending: false })
 
   return (
@@ -88,4 +100,3 @@ export default async function JournalPage() {
     </div>
   )
 }
-

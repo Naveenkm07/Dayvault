@@ -7,17 +7,29 @@ import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { PlanCheckbox } from '@/components/plans/plan-checkbox'
 import { DeletePlanButton } from '@/components/plans/delete-plan-button'
+import { auth } from '@clerk/nextjs/server'
 
 export default async function PlansPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) return null
+  if (!userId) return null
+
+  const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return null
+
+  const profileId = profile.id
 
   const { data: plans } = await supabase
     .from('plans')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('plan_date', { ascending: true })
 
   // Group by date

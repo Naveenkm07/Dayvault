@@ -12,6 +12,7 @@ export type Database = {
       profiles: {
         Row: {
           id: string
+          clerk_user_id: string
           name: string | null
           avatar_url: string | null
           theme: string | null
@@ -21,6 +22,7 @@ export type Database = {
         }
         Insert: {
           id: string
+          clerk_user_id: string
           name?: string | null
           avatar_url?: string | null
           theme?: string | null
@@ -30,6 +32,7 @@ export type Database = {
         }
         Update: {
           id?: string
+          clerk_user_id?: string
           name?: string | null
           avatar_url?: string | null
           theme?: string | null

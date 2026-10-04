@@ -4,12 +4,25 @@ import { buttonVariants } from '@/components/ui/button'
 import Link from 'next/link'
 import { Plus, Notebook, CheckSquare, Image as ImageIcon } from 'lucide-react'
 import { format } from 'date-fns'
+import { auth } from '@clerk/nextjs/server'
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) return null
+  if (!userId) return null
+
+  const supabase = await createClient()
+
+  // Get profile using Clerk user ID
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return null
+
+  const profileId = profile.id
 
   // Fetch some basic stats
   const [
@@ -18,10 +31,10 @@ export default async function DashboardPage() {
     { count: plansCount },
     { count: completedPlansCount },
   ] = await Promise.all([
-    supabase.from('daily_entries').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('photos').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('plans').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-    supabase.from('plans').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('completed', true),
+    supabase.from('daily_entries').select('*', { count: 'exact', head: true }).eq('user_id', profileId),
+    supabase.from('photos').select('*', { count: 'exact', head: true }).eq('user_id', profileId),
+    supabase.from('plans').select('*', { count: 'exact', head: true }).eq('user_id', profileId),
+    supabase.from('plans').select('*', { count: 'exact', head: true }).eq('user_id', profileId).eq('completed', true),
   ])
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -30,7 +43,7 @@ export default async function DashboardPage() {
   const { data: todaysPlans } = await supabase
     .from('plans')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .eq('plan_date', today)
     .order('created_at', { ascending: false })
     .limit(5)
@@ -39,7 +52,7 @@ export default async function DashboardPage() {
   const { data: recentEntries } = await supabase
     .from('daily_entries')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .order('entry_date', { ascending: false })
     .limit(3)
 

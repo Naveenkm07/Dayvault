@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@clerk/nextjs'
 
 const ACCENT_COLORS = [
   { id: 'blue', name: 'Blue', primary: 'oklch(0.57 0.24 262.881)', primaryForeground: 'oklch(0.985 0 0)' },
@@ -24,23 +25,26 @@ function applyAccentColor(accentId: string) {
 }
 
 export function ThemeInitializer() {
+  const { userId } = useAuth()
+
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase
-          .from('profiles')
-          .select('accent_color')
-          .eq('id', user.id)
-          .single()
-          .then(({ data: profile }) => {
-            if (profile?.accent_color) {
-              applyAccentColor(profile.accent_color)
-            }
-          })
+    async function loadAccentColor() {
+      if (!userId) return
+
+      const supabase = createClient()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('accent_color')
+        .eq('clerk_user_id', userId)
+        .single()
+
+      if (profile?.accent_color) {
+        applyAccentColor(profile.accent_color)
       }
-    })
-  }, [])
+    }
+
+    loadAccentColor()
+  }, [userId])
 
   return null
 }

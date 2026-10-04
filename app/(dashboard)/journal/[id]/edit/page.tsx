@@ -4,12 +4,24 @@ import { JournalForm } from '@/components/journal/journal-form'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
+import { auth } from '@clerk/nextjs/server'
 
 export default async function EditJournalEntryPage({ params }: { params: { id: string } }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { userId } = await auth()
 
-  if (!user) return null
+  if (!userId) return null
+
+  const supabase = await createClient()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return null
+
+  const profileId = profile.id
 
   const { data: entry } = await supabase
     .from('daily_entries')
@@ -22,7 +34,7 @@ export default async function EditJournalEntryPage({ params }: { params: { id: s
       )
     `)
     .eq('id', params.id)
-    .eq('user_id', user.id)
+    .eq('user_id', profileId)
     .single()
 
   if (!entry) {
